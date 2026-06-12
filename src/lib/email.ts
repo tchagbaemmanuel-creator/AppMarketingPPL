@@ -1,5 +1,3 @@
-import nodemailer from "nodemailer";
-
 interface SendEmailOptions {
   to: string | string[];
   subject: string;
@@ -11,50 +9,63 @@ function getAppUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
-function isEmailConfigured(): boolean {
+function getSender() {
+  const email = process.env.BREVO_SENDER_EMAIL;
+  const name = process.env.BREVO_SENDER_NAME ?? "PPL Outils Marketing";
+  return { email, name };
+}
+
+export function isEmailConfigured(): boolean {
   return Boolean(
-    process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS &&
+    process.env.BREVO_API_KEY &&
+      process.env.BREVO_SENDER_EMAIL &&
       process.env.ADMIN_EMAIL
   );
 }
 
-function createTransport() {
-  const port = Number(process.env.SMTP_PORT ?? 587);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+function normalizeRecipients(to: string | string[]) {
+  const list = Array.isArray(to) ? to : [to];
+  return list.map((email) => ({ email }));
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   if (!isEmailConfigured()) {
-    console.warn("[email] SMTP non configuré — notification non envoyée.");
+    console.warn("[email] Brevo non configuré — notification non envoyée.");
+    return false;
+  }
+
+  const sender = getSender();
+  if (!sender.email) {
+    console.warn("[email] BREVO_SENDER_EMAIL manquant.");
     return false;
   }
 
   try {
-    const transport = createTransport();
-    const from =
-      process.env.SMTP_FROM ??
-      `"PPL Outils Marketing" <${process.env.SMTP_USER}>`;
-
-    await transport.sendMail({
-      from,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "api-key": process.env.BREVO_API_KEY!,
+      },
+      body: JSON.stringify({
+        sender: { name: sender.name, email: sender.email },
+        to: normalizeRecipients(options.to),
+        subject: options.subject,
+        htmlContent: options.html,
+        textContent: options.text,
+      }),
     });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("[email] Brevo erreur:", response.status, errorBody);
+      return false;
+    }
+
     return true;
   } catch (error) {
-    console.error("[email] Erreur d'envoi:", error);
+    console.error("[email] Erreur d'envoi Brevo:", error);
     return false;
   }
 }
@@ -212,4 +223,4 @@ export async function notifyUserRequestDecision(data: {
   });
 }
 
-export { getAppUrl, isEmailConfigured };
+export { getAppUrl };
