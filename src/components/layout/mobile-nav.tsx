@@ -25,8 +25,12 @@ export function MobileNav({ userName, userRole }: MobileNavProps) {
   const quickLinks = [
     { href: "/dashboard", icon: LayoutDashboard },
     { href: "/requests", icon: ClipboardList },
-    { href: "/history", icon: History },
-    ...(userRole === "admin" ? [{ href: "/resources", icon: Package }] : []),
+    ...(userRole === "admin"
+      ? [
+          { href: "/history", icon: History },
+          { href: "/resources", icon: Package },
+        ]
+      : []),
   ];
 
   return (

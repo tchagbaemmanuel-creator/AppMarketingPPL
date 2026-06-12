@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/actions/auth";
 import { AppHeader } from "@/components/layout/app-header";
@@ -61,6 +62,10 @@ async function getHistory(
 export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
+
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
 
   const params = await searchParams;
   const supabase = await createClient();

@@ -80,12 +80,6 @@ export function getEmailConfigStatus(): {
     );
   }
 
-  if (senderEmail && adminRecipients.includes(senderEmail.toLowerCase())) {
-    warnings.push(
-      "ADMIN_EMAIL et BREVO_SENDER_EMAIL sont identiques — vérifiez aussi vos spams."
-    );
-  }
-
   return {
     configured: missing.length === 0,
     missing,
@@ -384,7 +378,7 @@ export async function notifyUserRequestDecision(data: {
   approved: boolean;
 }): Promise<EmailSendResult> {
   const appUrl = getAppUrl();
-  const historyUrl = `${appUrl}/history`;
+  const requestsUrl = `${appUrl}/requests`;
   const statusLabel = data.approved ? "approuvée" : "refusée";
   const statusColor = data.approved ? "#34707a" : "#d14d2f";
 
@@ -395,7 +389,7 @@ export async function notifyUserRequestDecision(data: {
       <li><strong>Ressource :</strong> ${data.resourceName}</li>
       <li><strong>Quantité :</strong> ${data.quantite}</li>
     </ul>
-    ${button(historyUrl, "Consulter mon historique")}
+    ${button(requestsUrl, "Voir mes demandes")}
   `;
 
   return sendEmail({
@@ -404,119 +398,6 @@ export async function notifyUserRequestDecision(data: {
     html: emailLayout(`Demande ${statusLabel}`, body),
     text: `Votre demande pour ${data.resourceName} a été ${statusLabel}.`,
   });
-}
-
-export async function sendAdminTestEmail(): Promise<EmailSendResult> {
-  const adminEmails = await resolveAdminNotificationEmails();
-  if (adminEmails.length === 0) {
-    return { ok: false, error: "ADMIN_EMAIL non configuré sur le serveur." };
-  }
-
-  const appUrl = getAppUrl();
-  return sendEmail({
-    to: adminEmails,
-    subject: "[PPL] Test de notification email",
-    html: emailLayout(
-      "Test email réussi",
-      `<p>Si vous recevez ce message, la configuration Brevo fonctionne correctement.</p>
-       <p>Application : <a href="${appUrl}">${appUrl}</a></p>`
-    ),
-    text: `Test email PPL — configuration OK. Application : ${appUrl}`,
-  });
-}
-
-export interface EmailDiagnostics {
-  config: ReturnType<typeof getEmailConfigStatus>;
-  serverIpv4: string | null;
-  serverIpv6: string | null;
-  apiKeyPrefixOk: boolean;
-  brevoAccountOk: boolean;
-  brevoAccountError: string | null;
-  ipBlocked: boolean;
-  sendResult: EmailSendResult;
-}
-
-async function fetchPublicIp(version: 4 | 6): Promise<string | null> {
-  const url =
-    version === 4
-      ? "https://api4.ipify.org?format=json"
-      : "https://api6.ipify.org?format=json";
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { ip?: string };
-    return data.ip ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function isIpBlockedError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("unrecognised ip") ||
-    lower.includes("unrecognized ip") ||
-    lower.includes("authorised_ips") ||
-    lower.includes("authorized_ips")
-  );
-}
-
-async function probeBrevoAccount(): Promise<{ ok: boolean; error: string | null; ipBlocked: boolean }> {
-  const apiKey = env("BREVO_API_KEY");
-  if (!apiKey) {
-    return { ok: false, error: "BREVO_API_KEY manquante", ipBlocked: false };
-  }
-
-  try {
-    const response = await fetch("https://api.brevo.com/v3/account", {
-      headers: { accept: "application/json", "api-key": apiKey },
-      cache: "no-store",
-    });
-    const body = await response.text();
-    if (response.ok) {
-      return { ok: true, error: null, ipBlocked: false };
-    }
-
-    let message = body;
-    try {
-      const parsed = JSON.parse(body) as { message?: string };
-      message = parsed.message ?? body;
-    } catch {
-      // garder le corps brut
-    }
-
-    return {
-      ok: false,
-      error: `Brevo ${response.status}: ${message}`,
-      ipBlocked: isIpBlockedError(message),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erreur réseau";
-    return { ok: false, error: message, ipBlocked: false };
-  }
-}
-
-export async function runEmailDiagnostics(): Promise<EmailDiagnostics> {
-  const [serverIpv4, serverIpv6, accountProbe, sendResult] = await Promise.all([
-    fetchPublicIp(4),
-    fetchPublicIp(6),
-    probeBrevoAccount(),
-    sendAdminTestEmail(),
-  ]);
-
-  const apiKey = env("BREVO_API_KEY");
-  const sendIpBlocked = sendResult.error ? isIpBlockedError(sendResult.error) : false;
-
-  return {
-    config: getEmailConfigStatus(),
-    serverIpv4,
-    serverIpv6,
-    apiKeyPrefixOk: apiKey.startsWith("xkeysib-"),
-    brevoAccountOk: accountProbe.ok,
-    brevoAccountError: accountProbe.error,
-    ipBlocked: accountProbe.ipBlocked || sendIpBlocked,
-    sendResult,
-  };
 }
 
 export { getAppUrl };

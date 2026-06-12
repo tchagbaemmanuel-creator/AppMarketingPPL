@@ -20,7 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/resources", label: "Ressources", icon: Package, adminOnly: true },
   { href: "/requests", label: "Demandes", icon: ClipboardList },
-  { href: "/history", label: "Historique", icon: History },
+  { href: "/history", label: "Historique", icon: History, adminOnly: true },
   { href: "/admin/users", label: "Inscriptions", icon: UserPlus, adminOnly: true },
 ];
 

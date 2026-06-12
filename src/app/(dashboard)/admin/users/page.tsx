@@ -26,8 +26,6 @@ export default async function AdminUsersPage() {
         <EmailConfigBanner
           configured={emailConfig.configured}
           missing={emailConfig.missing}
-          warnings={emailConfig.warnings}
-          adminRecipients={emailConfig.adminRecipients}
         />
         <PendingUsersTable users={pendingUsers} />
       </div>

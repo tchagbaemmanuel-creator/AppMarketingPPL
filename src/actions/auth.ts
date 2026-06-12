@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createApprovalToken } from "@/lib/approval-token";
-import { notifyAdminNewRegistration, notifyUserRegistrationApproved, sendAdminTestEmail, runEmailDiagnostics } from "@/lib/email";
+import { notifyAdminNewRegistration, notifyUserRegistrationApproved } from "@/lib/email";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { clearSession, getSessionUserId, setSession } from "@/lib/session";
 import type { User, UserStatus } from "@/lib/types";
@@ -216,20 +216,6 @@ export async function getPendingUsers(): Promise<User[]> {
     .order("created_at", { ascending: false });
 
   return data ?? [];
-}
-
-export async function testAdminEmailNotification() {
-  await requireAdmin();
-  const result = await sendAdminTestEmail();
-  if (!result.ok) {
-    return { error: result.error ?? "Échec de l'envoi du test." };
-  }
-  return { success: true, message: "Email de test envoyé. Vérifiez votre boîte de réception." };
-}
-
-export async function getEmailDiagnostics() {
-  await requireAdmin();
-  return runEmailDiagnostics();
 }
 
 export async function approveUser(userId: string) {
