@@ -425,4 +425,98 @@ export async function sendAdminTestEmail(): Promise<EmailSendResult> {
   });
 }
 
+export interface EmailDiagnostics {
+  config: ReturnType<typeof getEmailConfigStatus>;
+  serverIpv4: string | null;
+  serverIpv6: string | null;
+  apiKeyPrefixOk: boolean;
+  brevoAccountOk: boolean;
+  brevoAccountError: string | null;
+  ipBlocked: boolean;
+  sendResult: EmailSendResult;
+}
+
+async function fetchPublicIp(version: 4 | 6): Promise<string | null> {
+  const url =
+    version === 4
+      ? "https://api4.ipify.org?format=json"
+      : "https://api6.ipify.org?format=json";
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { ip?: string };
+    return data.ip ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isIpBlockedError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("unrecognised ip") ||
+    lower.includes("unrecognized ip") ||
+    lower.includes("authorised_ips") ||
+    lower.includes("authorized_ips")
+  );
+}
+
+async function probeBrevoAccount(): Promise<{ ok: boolean; error: string | null; ipBlocked: boolean }> {
+  const apiKey = env("BREVO_API_KEY");
+  if (!apiKey) {
+    return { ok: false, error: "BREVO_API_KEY manquante", ipBlocked: false };
+  }
+
+  try {
+    const response = await fetch("https://api.brevo.com/v3/account", {
+      headers: { accept: "application/json", "api-key": apiKey },
+      cache: "no-store",
+    });
+    const body = await response.text();
+    if (response.ok) {
+      return { ok: true, error: null, ipBlocked: false };
+    }
+
+    let message = body;
+    try {
+      const parsed = JSON.parse(body) as { message?: string };
+      message = parsed.message ?? body;
+    } catch {
+      // garder le corps brut
+    }
+
+    return {
+      ok: false,
+      error: `Brevo ${response.status}: ${message}`,
+      ipBlocked: isIpBlockedError(message),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erreur réseau";
+    return { ok: false, error: message, ipBlocked: false };
+  }
+}
+
+export async function runEmailDiagnostics(): Promise<EmailDiagnostics> {
+  const [serverIpv4, serverIpv6, accountProbe, sendResult] = await Promise.all([
+    fetchPublicIp(4),
+    fetchPublicIp(6),
+    probeBrevoAccount(),
+    sendAdminTestEmail(),
+  ]);
+
+  const apiKey = env("BREVO_API_KEY");
+  const sendIpBlocked = sendResult.error ? isIpBlockedError(sendResult.error) : false;
+
+  return {
+    config: getEmailConfigStatus(),
+    serverIpv4,
+    serverIpv6,
+    apiKeyPrefixOk: apiKey.startsWith("xkeysib-"),
+    brevoAccountOk: accountProbe.ok,
+    brevoAccountError: accountProbe.error,
+    ipBlocked: accountProbe.ipBlocked || sendIpBlocked,
+    sendResult,
+  };
+}
+
 export { getAppUrl };
