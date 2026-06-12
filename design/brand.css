@@ -1,0 +1,67 @@
+/**
+ * ============================================================
+ * CHARTE GRAPHIQUE PPL — Prestige Poultry Limited
+ * ============================================================
+ * Couleurs extraites de prestige-cg-ppl-110124 (2024)
+ * Rouge Falu #87181a · Jaune Curcuma #e7aa24
+ */
+
+:root {
+  /* --- Couleurs principales --- */
+  --brand-primary: #87181a;
+  --brand-primary-hover: #6f1315;
+  --brand-primary-muted: #a31f22;
+  --brand-primary-foreground: #ffffff;
+
+  /* --- Couleurs secondaires --- */
+  --brand-secondary: #34707a;
+  --brand-secondary-foreground: #ffffff;
+  --brand-accent: #e7aa24;
+  --brand-accent-foreground: #87181a;
+  --brand-accent-light: #eec991;
+  --brand-cinabre: #d14d2f;
+
+  /* --- Surfaces --- */
+  --brand-background: #faf8f5;
+  --brand-background-subtle: #f3efe8;
+  --brand-surface: #ffffff;
+  --brand-surface-elevated: #ffffff;
+  --brand-border: #e5ddd3;
+  --brand-border-subtle: #efeae3;
+
+  /* --- Sidebar --- */
+  --brand-sidebar: #87181a;
+  --brand-sidebar-foreground: #ffffff;
+  --brand-sidebar-muted: rgba(255, 255, 255, 0.65);
+  --brand-sidebar-active: rgba(231, 170, 36, 0.22);
+  --brand-sidebar-hover: rgba(255, 255, 255, 0.1);
+  --brand-sidebar-border: rgba(255, 255, 255, 0.12);
+
+  /* --- Texte --- */
+  --brand-text: #1a1412;
+  --brand-text-muted: #868683;
+  --brand-text-on-primary: #ffffff;
+
+  /* --- États --- */
+  --brand-success: #34707a;
+  --brand-success-bg: #edf5f6;
+  --brand-warning: #e7aa24;
+  --brand-warning-bg: #fef9ee;
+  --brand-danger: #d14d2f;
+  --brand-danger-bg: #fdf0ec;
+
+  /* --- Typographie --- */
+  --font-brand: var(--font-montserrat);
+  --font-heading: var(--font-kanit);
+
+  /* --- Formes --- */
+  --brand-radius: 0.75rem;
+  --brand-radius-lg: 1rem;
+  --brand-shadow: 0 1px 3px rgba(135, 24, 26, 0.06), 0 4px 16px rgba(135, 24, 26, 0.04);
+  --brand-shadow-lg: 0 8px 32px rgba(135, 24, 26, 0.12);
+
+  /* --- Dégradés --- */
+  --brand-gradient-auth: linear-gradient(135deg, #87181a 0%, #6f1315 45%, #87181a 100%);
+  --brand-gradient-sidebar: linear-gradient(180deg, #87181a 0%, #5c1012 100%);
+  --brand-gradient-accent: linear-gradient(90deg, #e7aa24 0%, #eec991 100%);
+}
