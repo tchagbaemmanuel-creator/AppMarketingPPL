@@ -9,6 +9,7 @@ import {
   History,
   LogOut,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/actions/auth";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/resources", label: "Ressources", icon: Package, adminOnly: true },
   { href: "/requests", label: "Demandes", icon: ClipboardList },
   { href: "/history", label: "Historique", icon: History, adminOnly: true },
+  { href: "/admin/accounts", label: "Comptes", icon: Users, adminOnly: true },
   { href: "/admin/users", label: "Inscriptions", icon: UserPlus, adminOnly: true },
 ];
 

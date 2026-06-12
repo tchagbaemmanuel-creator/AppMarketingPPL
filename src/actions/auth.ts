@@ -239,6 +239,7 @@ export async function approveUser(userId: string) {
   }
 
   revalidatePath("/admin/users");
+  revalidatePath("/admin/accounts");
   return { success: true, user };
 }
 
@@ -249,14 +250,14 @@ export async function rejectUser(userId: string) {
   const { error } = await supabase
     .from("users")
     .update({ status: "refuse" as UserStatus })
-    .eq("id", userId)
-    .eq("status", "en_attente");
+    .eq("id", userId);
 
   if (error) {
     return { error: "Impossible de refuser cette inscription." };
   }
 
   revalidatePath("/admin/users");
+  revalidatePath("/admin/accounts");
   return { success: true };
 }
 
@@ -285,5 +286,6 @@ export async function approveUserByToken(token: string) {
   }
 
   revalidatePath("/admin/users");
+  revalidatePath("/admin/accounts");
   return { success: true, nom: user.nom };
 }

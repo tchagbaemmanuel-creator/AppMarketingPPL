@@ -26,6 +26,17 @@ export const REQUEST_STATUS_LABELS: Record<string, string> = {
   refuse: "Refusé",
 };
 
+export const USER_STATUS_LABELS: Record<string, string> = {
+  en_attente: "En attente",
+  approuve: "Approuvé",
+  refuse: "Refusé",
+};
+
+export const USER_ROLE_LABELS: Record<string, string> = {
+  admin: "Administrateur",
+  membre: "Membre",
+};
+
 export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   ajout: "Ajout",
   retrait: "Retrait",
