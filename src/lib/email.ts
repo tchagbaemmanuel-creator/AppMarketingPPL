@@ -1,43 +1,179 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+
 interface SendEmailOptions {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
+  replyTo?: { email: string; name?: string };
+}
+
+export interface EmailSendResult {
+  ok: boolean;
+  error?: string;
+  messageId?: string;
+}
+
+function env(name: string): string {
+  return (process.env[name] ?? "").trim();
 }
 
 function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  return env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
 }
 
 function getSender() {
-  const email = process.env.BREVO_SENDER_EMAIL;
-  const name = process.env.BREVO_SENDER_NAME ?? "PPL Outils Marketing";
+  const senderIdRaw = env("BREVO_SENDER_ID");
+  const email = env("BREVO_SENDER_EMAIL");
+  const name = env("BREVO_SENDER_NAME") || "PPL Outils Marketing";
+
+  if (senderIdRaw) {
+    const id = Number(senderIdRaw);
+    if (!Number.isNaN(id) && id > 0) {
+      return { id, name, email: email || undefined };
+    }
+  }
+
   return { email, name };
 }
 
+function parseAdminEmailsFromEnv(): string[] {
+  const raw = env("ADMIN_EMAIL");
+  if (!raw) return [];
+
+  return [...new Set(raw.split(/[,;]/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+}
+
+function isDeliverableEmail(email: string): boolean {
+  if (!email.includes("@")) return false;
+  const domain = email.split("@")[1] ?? "";
+  return !domain.endsWith(".local") && domain !== "localhost";
+}
+
+export function getEmailConfigStatus(): {
+  configured: boolean;
+  missing: string[];
+  adminRecipients: string[];
+} {
+  const missing: string[] = [];
+  const apiKey = env("BREVO_API_KEY");
+  const senderEmail = env("BREVO_SENDER_EMAIL");
+  const senderId = env("BREVO_SENDER_ID");
+  const adminRecipients = parseAdminEmailsFromEnv();
+
+  if (!apiKey) missing.push("BREVO_API_KEY");
+  if (!senderEmail && !senderId) missing.push("BREVO_SENDER_EMAIL ou BREVO_SENDER_ID");
+  if (adminRecipients.length === 0) missing.push("ADMIN_EMAIL");
+
+  const invalidAdmin = adminRecipients.filter((e) => !isDeliverableEmail(e));
+  if (invalidAdmin.length > 0) {
+    missing.push(
+      `ADMIN_EMAIL invalide (${invalidAdmin.join(", ")}) — utilisez une vraie adresse, pas admin@ppl.local`
+    );
+  }
+
+  if (apiKey && !apiKey.startsWith("xkeysib-")) {
+    missing.push("BREVO_API_KEY doit être une clé API (xkeysib-...), pas la clé SMTP");
+  }
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    adminRecipients,
+  };
+}
+
 export function isEmailConfigured(): boolean {
-  return Boolean(
-    process.env.BREVO_API_KEY &&
-      process.env.BREVO_SENDER_EMAIL &&
-      process.env.ADMIN_EMAIL
-  );
+  return getEmailConfigStatus().configured;
 }
 
 function normalizeRecipients(to: string | string[]) {
   const list = Array.isArray(to) ? to : [to];
-  return list.map((email) => ({ email }));
+  return list
+    .map((email) => email.trim().toLowerCase())
+    .filter(isDeliverableEmail)
+    .map((email) => ({ email }));
 }
 
-export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
-  if (!isEmailConfigured()) {
-    console.warn("[email] Brevo non configuré — notification non envoyée.");
-    return false;
+export async function resolveAdminNotificationEmails(): Promise<string[]> {
+  const fromEnv = parseAdminEmailsFromEnv().filter(isDeliverableEmail);
+  if (fromEnv.length > 0) return fromEnv;
+
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("users")
+      .select("email")
+      .eq("role", "admin")
+      .eq("status", "approuve")
+      .not("email", "is", null);
+
+    const fromDb = (data ?? [])
+      .map((row) => row.email?.trim().toLowerCase() ?? "")
+      .filter(isDeliverableEmail);
+
+    return [...new Set(fromDb)];
+  } catch (error) {
+    console.error("[email] Impossible de lire les emails admin en base:", error);
+    return [];
+  }
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSenderPayload(sender: ReturnType<typeof getSender>) {
+  if ("id" in sender && sender.id && !Number.isNaN(sender.id)) {
+    return { id: sender.id, name: sender.name };
+  }
+  if (sender.email) {
+    return { name: sender.name, email: sender.email };
+  }
+  return null;
+}
+
+export async function sendEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  const config = getEmailConfigStatus();
+  if (!config.configured) {
+    const error = `Configuration email incomplète : ${config.missing.join(", ")}`;
+    console.warn("[email]", error);
+    return { ok: false, error };
+  }
+
+  const recipients = normalizeRecipients(options.to);
+  if (recipients.length === 0) {
+    const error = "Aucun destinataire email valide.";
+    console.warn("[email]", error);
+    return { ok: false, error };
   }
 
   const sender = getSender();
-  if (!sender.email) {
-    console.warn("[email] BREVO_SENDER_EMAIL manquant.");
-    return false;
+  const senderPayload = buildSenderPayload(sender);
+  if (!senderPayload) {
+    const error = "Expéditeur Brevo invalide (BREVO_SENDER_EMAIL ou BREVO_SENDER_ID).";
+    console.warn("[email]", error);
+    return { ok: false, error };
+  }
+
+  const payload: Record<string, unknown> = {
+    sender: senderPayload,
+    to: recipients,
+    subject: options.subject,
+    htmlContent: options.html,
+    textContent: options.text ?? stripHtml(options.html),
+    tags: ["ppl-marketing"],
+  };
+
+  if (options.replyTo?.email && isDeliverableEmail(options.replyTo.email)) {
+    payload.replyTo = {
+      email: options.replyTo.email,
+      name: options.replyTo.name,
+    };
   }
 
   try {
@@ -46,27 +182,40 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
       headers: {
         accept: "application/json",
         "content-type": "application/json",
-        "api-key": process.env.BREVO_API_KEY!,
+        "api-key": env("BREVO_API_KEY"),
       },
-      body: JSON.stringify({
-        sender: { name: sender.name, email: sender.email },
-        to: normalizeRecipients(options.to),
-        subject: options.subject,
-        htmlContent: options.html,
-        textContent: options.text,
-      }),
+      body: JSON.stringify(payload),
+      cache: "no-store",
     });
 
+    const responseBody = await response.text();
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("[email] Brevo erreur:", response.status, errorBody);
-      return false;
+      let errorMessage = responseBody;
+      try {
+        const parsed = JSON.parse(responseBody) as { message?: string; code?: string };
+        errorMessage = parsed.message ?? responseBody;
+      } catch {
+        // garder le corps brut
+      }
+      const error = `Brevo ${response.status}: ${errorMessage}`;
+      console.error("[email]", error);
+      return { ok: false, error };
     }
 
-    return true;
+    let messageId: string | undefined;
+    try {
+      const parsed = JSON.parse(responseBody) as { messageId?: string };
+      messageId = parsed.messageId;
+    } catch {
+      // réponse sans JSON
+    }
+
+    console.info("[email] Envoyé à", recipients.map((r) => r.email).join(", "), messageId ?? "");
+    return { ok: true, messageId };
   } catch (error) {
-    console.error("[email] Erreur d'envoi Brevo:", error);
-    return false;
+    const message = error instanceof Error ? error.message : "Erreur réseau";
+    console.error("[email] Erreur d'envoi Brevo:", message);
+    return { ok: false, error: message };
   }
 }
 
@@ -102,7 +251,7 @@ function button(href: string, label: string): string {
 }
 
 export function getAdminEmail(): string {
-  return process.env.ADMIN_EMAIL ?? "";
+  return parseAdminEmailsFromEnv()[0] ?? "";
 }
 
 export async function notifyAdminNewRegistration(user: {
@@ -110,7 +259,15 @@ export async function notifyAdminNewRegistration(user: {
   email: string;
   fonction: string | null;
   approvalToken: string;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
+  const adminEmails = await resolveAdminNotificationEmails();
+  if (adminEmails.length === 0) {
+    return {
+      ok: false,
+      error: "Aucun email administrateur configuré (ADMIN_EMAIL sur Render).",
+    };
+  }
+
   const appUrl = getAppUrl();
   const approveUrl = `${appUrl}/admin/approve?token=${encodeURIComponent(user.approvalToken)}`;
   const adminUrl = `${appUrl}/admin/users`;
@@ -129,17 +286,18 @@ export async function notifyAdminNewRegistration(user: {
   `;
 
   return sendEmail({
-    to: getAdminEmail(),
+    to: adminEmails,
     subject: `[PPL] Demande d'accès — ${user.nom}`,
     html: emailLayout("Nouvelle demande d'inscription", body),
-    text: `${user.nom} demande l'accès. Approuver : ${approveUrl}`,
+    text: `${user.nom} (${user.email}) demande l'accès. Approuver : ${approveUrl}`,
+    replyTo: { email: user.email, name: user.nom },
   });
 }
 
 export async function notifyUserRegistrationApproved(data: {
   email: string;
   nom: string;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
   const appUrl = getAppUrl();
   const loginUrl = `${appUrl}/login`;
 
@@ -171,7 +329,12 @@ export async function notifyAdminNewRequest(data: {
   resourceName: string;
   quantite: number;
   motif: string;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
+  const adminEmails = await resolveAdminNotificationEmails();
+  if (adminEmails.length === 0) {
+    return { ok: false, error: "Aucun email administrateur configuré." };
+  }
+
   const appUrl = getAppUrl();
   const requestsUrl = `${appUrl}/requests`;
 
@@ -186,7 +349,7 @@ export async function notifyAdminNewRequest(data: {
   `;
 
   return sendEmail({
-    to: getAdminEmail(),
+    to: adminEmails,
     subject: `[PPL] Nouvelle demande — ${data.resourceName}`,
     html: emailLayout("Nouvelle demande de retrait", body),
     text: `${data.demandeur} demande ${data.quantite}x ${data.resourceName}. Voir : ${requestsUrl}`,
@@ -199,7 +362,7 @@ export async function notifyUserRequestDecision(data: {
   resourceName: string;
   quantite: number;
   approved: boolean;
-}): Promise<boolean> {
+}): Promise<EmailSendResult> {
   const appUrl = getAppUrl();
   const historyUrl = `${appUrl}/history`;
   const statusLabel = data.approved ? "approuvée" : "refusée";
@@ -220,6 +383,25 @@ export async function notifyUserRequestDecision(data: {
     subject: `[PPL] Demande ${statusLabel} — ${data.resourceName}`,
     html: emailLayout(`Demande ${statusLabel}`, body),
     text: `Votre demande pour ${data.resourceName} a été ${statusLabel}.`,
+  });
+}
+
+export async function sendAdminTestEmail(): Promise<EmailSendResult> {
+  const adminEmails = await resolveAdminNotificationEmails();
+  if (adminEmails.length === 0) {
+    return { ok: false, error: "ADMIN_EMAIL non configuré sur le serveur." };
+  }
+
+  const appUrl = getAppUrl();
+  return sendEmail({
+    to: adminEmails,
+    subject: "[PPL] Test de notification email",
+    html: emailLayout(
+      "Test email réussi",
+      `<p>Si vous recevez ce message, la configuration Brevo fonctionne correctement.</p>
+       <p>Application : <a href="${appUrl}">${appUrl}</a></p>`
+    ),
+    text: `Test email PPL — configuration OK. Application : ${appUrl}`,
   });
 }
 

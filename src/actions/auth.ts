@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createApprovalToken } from "@/lib/approval-token";
-import { notifyAdminNewRegistration, notifyUserRegistrationApproved } from "@/lib/email";
+import { notifyAdminNewRegistration, notifyUserRegistrationApproved, sendAdminTestEmail } from "@/lib/email";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { clearSession, getSessionUserId, setSession } from "@/lib/session";
 import type { User, UserStatus } from "@/lib/types";
@@ -90,17 +90,23 @@ export async function signUp(formData: FormData) {
   }
 
   const approvalToken = await createApprovalToken(newUser.id);
-  await notifyAdminNewRegistration({
+  const emailResult = await notifyAdminNewRegistration({
     nom: newUser.nom,
     email: newUser.email ?? email,
     fonction: newUser.fonction,
     approvalToken,
   });
 
+  if (!emailResult.ok) {
+    console.error("[signUp] Notification admin échouée:", emailResult.error);
+  }
+
   return {
     success: true,
-    message:
-      "Votre demande a été envoyée. Vous recevrez l'accès une fois validée par un administrateur.",
+    emailSent: emailResult.ok,
+    message: emailResult.ok
+      ? "Votre demande a été envoyée. Vous recevrez l'accès une fois validée par un administrateur."
+      : "Votre demande a été enregistrée. La notification email à l'administrateur n'a pas pu être envoyée — il pourra valider votre compte depuis la plateforme.",
   };
 }
 
@@ -210,6 +216,15 @@ export async function getPendingUsers(): Promise<User[]> {
     .order("created_at", { ascending: false });
 
   return data ?? [];
+}
+
+export async function testAdminEmailNotification() {
+  await requireAdmin();
+  const result = await sendAdminTestEmail();
+  if (!result.ok) {
+    return { error: result.error ?? "Échec de l'envoi du test." };
+  }
+  return { success: true, message: "Email de test envoyé. Vérifiez votre boîte de réception." };
 }
 
 export async function approveUser(userId: string) {
