@@ -56,7 +56,17 @@ export function EmailConfigBanner({
             </Button>
           </div>
           {feedback && (
-            <p className="mt-3 text-sm text-brand-text-muted">{feedback}</p>
+            <p
+              className={`mt-3 text-sm ${
+                feedback.toLowerCase().includes("brevo") ||
+                feedback.toLowerCase().includes("échec") ||
+                feedback.toLowerCase().includes("bloque")
+                  ? "rounded-lg bg-brand-danger-bg px-3 py-2 text-brand-danger"
+                  : "text-brand-text-muted"
+              }`}
+            >
+              {feedback}
+            </p>
           )}
         </div>
         {warnings.length > 0 && (

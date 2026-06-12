@@ -205,6 +205,15 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailSendRes
       try {
         const parsed = JSON.parse(responseBody) as { message?: string; code?: string };
         errorMessage = parsed.message ?? responseBody;
+        if (
+          response.status === 401 &&
+          (errorMessage.includes("unrecognised IP") ||
+            errorMessage.includes("authorised_ips") ||
+            errorMessage.includes("unrecognized IP"))
+        ) {
+          errorMessage =
+            "Brevo bloque l'IP du serveur Render. Désactivez la restriction IP dans Brevo → Sécurité → IP autorisées, ou ajoutez l'IP de Render.";
+        }
       } catch {
         // garder le corps brut
       }
