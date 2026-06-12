@@ -53,9 +53,11 @@ function isDeliverableEmail(email: string): boolean {
 export function getEmailConfigStatus(): {
   configured: boolean;
   missing: string[];
+  warnings: string[];
   adminRecipients: string[];
 } {
   const missing: string[] = [];
+  const warnings: string[] = [];
   const apiKey = env("BREVO_API_KEY");
   const senderEmail = env("BREVO_SENDER_EMAIL");
   const senderId = env("BREVO_SENDER_ID");
@@ -73,12 +75,21 @@ export function getEmailConfigStatus(): {
   }
 
   if (apiKey && !apiKey.startsWith("xkeysib-")) {
-    missing.push("BREVO_API_KEY doit être une clé API (xkeysib-...), pas la clé SMTP");
+    warnings.push(
+      "BREVO_API_KEY ne commence pas par xkeysib-. Générez une clé API classique dans Brevo (SMTP & API → API Keys) sans cocher « Create MCP server API key »."
+    );
+  }
+
+  if (senderEmail && adminRecipients.includes(senderEmail.toLowerCase())) {
+    warnings.push(
+      "ADMIN_EMAIL et BREVO_SENDER_EMAIL sont identiques — vérifiez aussi vos spams."
+    );
   }
 
   return {
     configured: missing.length === 0,
     missing,
+    warnings,
     adminRecipients,
   };
 }

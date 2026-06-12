@@ -45,7 +45,9 @@ if (missing.length > 0) {
 }
 
 if (!apiKey.startsWith("xkeysib-")) {
-  console.warn("Attention : BREVO_API_KEY ne commence pas par xkeysib- (clé API REST ?)");
+  console.warn(
+    "Attention : BREVO_API_KEY ne commence pas par xkeysib-. Utilisez une clé API classique (pas MCP)."
+  );
 }
 
 const payload = {

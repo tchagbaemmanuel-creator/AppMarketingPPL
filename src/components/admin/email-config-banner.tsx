@@ -8,12 +8,14 @@ import { AlertTriangle, Mail, CheckCircle2 } from "lucide-react";
 interface EmailConfigBannerProps {
   configured: boolean;
   missing: string[];
+  warnings: string[];
   adminRecipients: string[];
 }
 
 export function EmailConfigBanner({
   configured,
   missing,
+  warnings,
   adminRecipients,
 }: EmailConfigBannerProps) {
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -29,31 +31,45 @@ export function EmailConfigBanner({
 
   if (configured) {
     return (
-      <div className="mb-6 rounded-xl border border-brand-border bg-brand-background-subtle px-4 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-start gap-3 text-sm">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-success" />
-            <div>
-              <p className="font-medium text-brand-text">Notifications email actives</p>
-              <p className="text-brand-text-muted">
-                Les alertes sont envoyées à : {adminRecipients.join(", ")}
-              </p>
+      <div className="mb-6 space-y-3">
+        <div className="rounded-xl border border-brand-border bg-brand-background-subtle px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-success" />
+              <div>
+                <p className="font-medium text-brand-text">Notifications email actives</p>
+                <p className="text-brand-text-muted">
+                  Les alertes sont envoyées à : {adminRecipients.join(", ")}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestEmail}
+              disabled={isPending}
+              className="rounded-lg"
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              {isPending ? "Envoi..." : "Tester l'envoi"}
+            </Button>
+          </div>
+          {feedback && (
+            <p className="mt-3 text-sm text-brand-text-muted">{feedback}</p>
+          )}
+        </div>
+        {warnings.length > 0 && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <ul className="list-inside list-disc space-y-1">
+                {warnings.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleTestEmail}
-            disabled={isPending}
-            className="rounded-lg"
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            {isPending ? "Envoi..." : "Tester l'envoi"}
-          </Button>
-        </div>
-        {feedback && (
-          <p className="mt-3 text-sm text-brand-text-muted">{feedback}</p>
         )}
       </div>
     );
