@@ -18,9 +18,6 @@ export const metadata: Metadata = {
   title: "PPL — Outils Marketing",
   description:
     "Plateforme interne de gestion des ressources marketing — Poulet Prestige Limited",
-  icons: {
-    icon: "/charte-graphique/logos/logo-ppl.jpg",
-  },
 };
 
 export default function RootLayout({
